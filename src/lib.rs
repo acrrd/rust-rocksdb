@@ -94,6 +94,8 @@ pub mod prelude;
 mod slice_transform;
 mod snapshot;
 mod sst_file_writer;
+mod transaction_db;
+mod transaction;
 mod write_batch;
 
 pub use crate::{
@@ -105,8 +107,8 @@ pub use crate::{
         BlockBasedIndexType, BlockBasedOptions, BottommostLevelCompaction, Cache, CompactOptions,
         DBCompactionStyle, DBCompressionType, DBPath, DBRecoveryMode, DataBlockIndexType, Env,
         FifoCompactOptions, FlushOptions, IngestExternalFileOptions, MemtableFactory, Options,
-        PlainTableFactoryOptions, ReadOptions, UniversalCompactOptions,
-        UniversalCompactionStopStyle, WriteOptions,
+        PlainTableFactoryOptions, ReadOptions, TransactionDBOptions, UniversalCompactOptions,
+        UniversalCompactionStopStyle, WriteOptions, TransactionOptions, OptimisticTransactionOptions
     },
     db_pinnable_slice::DBPinnableSlice,
     merge_operator::MergeOperands,
@@ -114,6 +116,8 @@ pub use crate::{
     slice_transform::SliceTransform,
     snapshot::Snapshot,
     sst_file_writer::SstFileWriter,
+    transaction_db::TransactionDB,
+    transaction::Transaction,
     write_batch::{WriteBatch, WriteBatchIterator},
 };
 
@@ -121,6 +125,7 @@ use librocksdb_sys as ffi;
 
 use std::error;
 use std::fmt;
+use std::slice;
 
 /// A simple wrapper round a string, used for errors reported from
 /// ffi calls.
@@ -161,6 +166,14 @@ impl fmt::Display for Error {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         self.message.fmt(formatter)
     }
+}
+
+pub(crate) unsafe fn make_vec_from_val_ptr(val_ptr: *mut u8, val_len: usize) -> Vec<u8> {
+    let val = slice::from_raw_parts(val_ptr, val_len);
+    let val = val.to_vec();
+    libc::free(val_ptr as *mut libc::c_void);
+
+    val
 }
 
 #[cfg(test)]

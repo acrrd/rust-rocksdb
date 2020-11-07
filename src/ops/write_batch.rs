@@ -13,7 +13,10 @@
 
 use ambassador::delegatable_trait;
 
-use crate::{db::DBInner, ffi, handle::Handle, Error, WriteBatch, WriteOptions};
+use crate::{
+    db::DBInner, ffi, handle::Handle, transaction_db::TransactionDB, Error, WriteBatch,
+    WriteOptions,
+};
 
 #[delegatable_trait]
 pub trait WriteBatchWrite {
@@ -46,6 +49,19 @@ impl WriteBatchWriteOpt for DBInner {
     fn write_opt(&self, batch: WriteBatch, writeopts: &WriteOptions) -> Result<(), Error> {
         unsafe {
             ffi_try!(ffi::rocksdb_write(
+                self.handle(),
+                writeopts.inner,
+                batch.inner
+            ));
+        }
+        Ok(())
+    }
+}
+
+impl WriteBatchWriteOpt for TransactionDB {
+    fn write_opt(&self, batch: WriteBatch, writeopts: &WriteOptions) -> Result<(), Error> {
+        unsafe {
+            ffi_try!(ffi::rocksdb_transactiondb_write(
                 self.handle(),
                 writeopts.inner,
                 batch.inner

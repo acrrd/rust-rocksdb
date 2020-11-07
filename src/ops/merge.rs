@@ -14,7 +14,10 @@
 use ambassador::delegatable_trait;
 use libc::{c_char, size_t};
 
-use crate::{db::DBInner, ffi, handle::Handle, ColumnFamily, Error, WriteOptions};
+use crate::{
+    db::DBInner, ffi, handle::Handle, transaction::Transaction, transaction_db::TransactionDB,
+    ColumnFamily, Error, WriteOptions,
+};
 
 #[delegatable_trait]
 pub trait Merge {
@@ -67,6 +70,19 @@ where
     }
 }
 
+impl<T> MergeCF for T
+where
+    T: MergeCFOpt,
+{
+    fn merge_cf<K, V>(&self, cf: &ColumnFamily, key: K, value: V) -> Result<(), Error>
+    where
+        K: AsRef<[u8]>,
+        V: AsRef<[u8]>,
+    {
+        self.merge_cf_opt(cf, key, value, &WriteOptions::default())
+    }
+}
+
 impl MergeOpt for DBInner {
     fn merge_opt<K, V>(&self, key: K, value: V, writeopts: &WriteOptions) -> Result<(), Error>
     where
@@ -90,19 +106,6 @@ impl MergeOpt for DBInner {
     }
 }
 
-impl<T> MergeCF for T
-where
-    T: MergeCFOpt,
-{
-    fn merge_cf<K, V>(&self, cf: &ColumnFamily, key: K, value: V) -> Result<(), Error>
-    where
-        K: AsRef<[u8]>,
-        V: AsRef<[u8]>,
-    {
-        self.merge_cf_opt(cf, key, value, &WriteOptions::default())
-    }
-}
-
 impl MergeCFOpt for DBInner {
     fn merge_cf_opt<K, V>(
         &self,
@@ -122,6 +125,118 @@ impl MergeCFOpt for DBInner {
             ffi_try!(ffi::rocksdb_merge_cf(
                 self.handle(),
                 writeopts.inner,
+                cf.inner,
+                key.as_ptr() as *const c_char,
+                key.len() as size_t,
+                value.as_ptr() as *const c_char,
+                value.len() as size_t,
+            ));
+            Ok(())
+        }
+    }
+}
+
+impl MergeOpt for TransactionDB {
+    fn merge_opt<K, V>(
+        &self,
+        key: K,
+        value: V,
+        writeopts: &WriteOptions,
+    ) -> Result<(), Error>
+    where
+        K: AsRef<[u8]>,
+        V: AsRef<[u8]>,
+    {
+        let key = key.as_ref();
+        let value = value.as_ref();
+
+        unsafe {
+            ffi_try!(ffi::rocksdb_transactiondb_merge(
+                self.handle(),
+                writeopts.inner,
+                key.as_ptr() as *const c_char,
+                key.len() as size_t,
+                value.as_ptr() as *const c_char,
+                value.len() as size_t,
+            ));
+            Ok(())
+        }
+    }
+}
+
+impl MergeCFOpt for TransactionDB {
+    fn merge_cf_opt<K, V>(
+        &self,
+        cf: &ColumnFamily,
+        key: K,
+        value: V,
+        writeopts: &WriteOptions,
+    ) -> Result<(), Error>
+    where
+        K: AsRef<[u8]>,
+        V: AsRef<[u8]>,
+    {
+        let key = key.as_ref();
+        let value = value.as_ref();
+
+        unsafe {
+            ffi_try!(ffi::rocksdb_transactiondb_merge_cf(
+                self.handle(),
+                writeopts.inner,
+                cf.inner,
+                key.as_ptr() as *const c_char,
+                key.len() as size_t,
+                value.as_ptr() as *const c_char,
+                value.len() as size_t,
+            ));
+            Ok(())
+        }
+    }
+}
+
+impl<'a> Merge for Transaction<'a> {
+    fn merge<K, V>(
+        &self,
+        key: K,
+        value: V,
+    ) -> Result<(), Error>
+    where
+        K: AsRef<[u8]>,
+        V: AsRef<[u8]>,
+    {
+        let key = key.as_ref();
+        let value = value.as_ref();
+
+        unsafe {
+            ffi_try!(ffi::rocksdb_transaction_merge(
+                self.handle(),
+                key.as_ptr() as *const c_char,
+                key.len() as size_t,
+                value.as_ptr() as *const c_char,
+                value.len() as size_t,
+            ));
+            Ok(())
+        }
+    }
+}
+
+impl<'a> MergeCF for Transaction<'a> {
+    fn merge_cf<K, V>(
+        &self,
+        cf: &ColumnFamily,
+        key: K,
+        value: V,
+    ) -> Result<(), Error>
+    where
+        K: AsRef<[u8]>,
+        V: AsRef<[u8]>,
+    {
+        let key = key.as_ref();
+        let value = value.as_ref();
+
+        unsafe {
+            ffi_try!(ffi::rocksdb_transaction_merge_cf(
+                self.handle(),
                 cf.inner,
                 key.as_ptr() as *const c_char,
                 key.len() as size_t,

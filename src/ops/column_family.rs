@@ -11,7 +11,9 @@
 // limitations under the License.
 //
 
-use crate::{db::DBInner, ffi, handle::Handle, ColumnFamily, Error, Options};
+use crate::{
+    db::DBInner, ffi, handle::Handle, transaction_db::TransactionDB, ColumnFamily, Error, Options,
+};
 use ambassador::delegatable_trait;
 use std::collections::BTreeMap;
 use std::ffi::CString;
@@ -82,5 +84,27 @@ impl DropColumnFamily for DBInner {
         } else {
             Err(Error::new(format!("Invalid column family: {}", name)))
         }
+    }
+}
+
+impl CreateColumnFamily for TransactionDB {
+    fn create_cf<N: AsRef<str>>(&mut self, name: N, opts: &Options) -> Result<(), Error> {
+        let cname = CString::new(name.as_ref().as_bytes()).map_err(|_| {
+            Error::new(format!(
+                "Failed to convert path to CString when creating cf: {}",
+                name.as_ref()
+            ))
+        })?;
+        unsafe {
+            let inner = ffi_try!(ffi::rocksdb_transactiondb_create_column_family(
+                self.handle(),
+                opts.inner,
+                cname.as_ptr(),
+            ));
+
+            self.get_mut_cfs()
+                .insert(name.as_ref().to_string(), ColumnFamily { inner });
+        };
+        Ok(())
     }
 }

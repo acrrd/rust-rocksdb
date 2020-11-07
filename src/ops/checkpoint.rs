@@ -11,7 +11,7 @@
 // limitations under the License.
 //
 
-use crate::{db::DBInner, ffi, handle::Handle, Error};
+use crate::{db::DBInner, ffi, handle::Handle, transaction_db::TransactionDB, Error};
 use ambassador::delegatable_trait;
 
 /// This is an internal trait used to create and free a checkpoint
@@ -25,5 +25,13 @@ impl CheckpointInternal for DBInner {
         Ok(ffi_try!(ffi::rocksdb_checkpoint_object_create(
             self.handle()
         )))
+    }
+}
+
+impl CheckpointInternal for TransactionDB {
+    unsafe fn create_checkpoint_object(&self) -> Result<*mut ffi::rocksdb_checkpoint_t, Error> {
+        Ok(ffi_try!(
+            ffi::rocksdb_transactiondb_checkpoint_object_create(self.handle())
+        ))
     }
 }

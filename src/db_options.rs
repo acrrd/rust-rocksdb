@@ -3431,6 +3431,158 @@ impl Drop for DBPath {
     }
 }
 
+pub struct TransactionDBOptions {
+    pub(crate) inner: *mut ffi::rocksdb_transactiondb_options_t,
+}
+
+impl TransactionDBOptions {
+    /// Create a new transaction options
+    pub fn new() -> Self {
+        unsafe {
+            let inner = ffi::rocksdb_transactiondb_options_create();
+            Self { inner }
+        }
+    }
+
+    pub fn set_default_lock_timeout(&self, default_lock_timeout: i64) {
+        unsafe {
+            ffi::rocksdb_transactiondb_options_set_default_lock_timeout(
+                self.inner,
+                default_lock_timeout,
+            )
+        }
+    }
+
+    pub fn set_max_num_locks(&self, max_num_locks: i64) {
+        unsafe { ffi::rocksdb_transactiondb_options_set_max_num_locks(self.inner, max_num_locks) }
+    }
+
+    pub fn set_num_stripes(&self, num_stripes: usize) {
+        unsafe { ffi::rocksdb_transactiondb_options_set_num_stripes(self.inner, num_stripes) }
+    }
+
+    pub fn set_transaction_lock_timeout(&self, txn_lock_timeout: i64) {
+        unsafe {
+            ffi::rocksdb_transactiondb_options_set_transaction_lock_timeout(
+                self.inner,
+                txn_lock_timeout,
+            )
+        }
+    }
+}
+
+impl Drop for TransactionDBOptions {
+    fn drop(&mut self) {
+        unsafe {
+            ffi::rocksdb_transactiondb_options_destroy(self.inner);
+        }
+    }
+}
+
+impl Default for TransactionDBOptions {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+pub struct TransactionOptions {
+    pub(crate) inner: *mut ffi::rocksdb_transaction_options_t,
+}
+
+impl TransactionOptions {
+    /// Create new transaction options
+    pub fn new() -> Self {
+        unsafe {
+            let inner = ffi::rocksdb_transaction_options_create();
+            Self { inner }
+        }
+    }
+
+    pub fn set_deadlock_detect(&self, deadlock_detect: bool) {
+        unsafe {
+            ffi::rocksdb_transaction_options_set_deadlock_detect(
+                self.inner,
+                deadlock_detect as c_uchar,
+            )
+        }
+    }
+
+    pub fn set_deadlock_detect_depth(&self, depth: i64) {
+        unsafe { ffi::rocksdb_transaction_options_set_deadlock_detect_depth(self.inner, depth) }
+    }
+
+    pub fn set_expiration(&self, expiration: i64) {
+        unsafe { ffi::rocksdb_transaction_options_set_expiration(self.inner, expiration) }
+    }
+
+    pub fn set_lock_timeout(&self, lock_timeout: i64) {
+        unsafe { ffi::rocksdb_transaction_options_set_lock_timeout(self.inner, lock_timeout) }
+    }
+
+    pub fn set_max_write_batch_size(&self, size: usize) {
+        unsafe { ffi::rocksdb_transaction_options_set_max_write_batch_size(self.inner, size) }
+    }
+
+    pub fn set_snapshot(&mut self, set_snapshot: bool) {
+        unsafe {
+            ffi::rocksdb_transaction_options_set_set_snapshot(self.inner, set_snapshot as c_uchar);
+        }
+    }
+}
+
+impl Drop for TransactionOptions {
+    fn drop(&mut self) {
+        unsafe {
+            ffi::rocksdb_transaction_options_destroy(self.inner);
+        }
+    }
+}
+
+impl Default for TransactionOptions {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+pub struct OptimisticTransactionOptions {
+    pub(crate) inner: *mut ffi::rocksdb_optimistictransaction_options_t,
+}
+
+impl OptimisticTransactionOptions {
+    /// Create new optimistic transaction options
+    pub fn new() -> OptimisticTransactionOptions {
+        unsafe {
+            let inner = ffi::rocksdb_optimistictransaction_options_create();
+            OptimisticTransactionOptions { inner }
+        }
+    }
+
+    /// Set a snapshot at start of transaction by setting set_snapshot=true
+    /// Default: false
+    pub fn set_snapshot(&mut self, set_snapshot: bool) {
+        unsafe {
+            ffi::rocksdb_optimistictransaction_options_set_set_snapshot(
+                self.inner,
+                set_snapshot as c_uchar,
+            );
+        }
+    }
+}
+
+impl Drop for OptimisticTransactionOptions {
+    fn drop(&mut self) {
+        unsafe {
+            ffi::rocksdb_optimistictransaction_options_destroy(self.inner);
+        }
+    }
+}
+
+impl Default for OptimisticTransactionOptions {
+    fn default() -> OptimisticTransactionOptions {
+        OptimisticTransactionOptions::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::{MemtableFactory, Options};

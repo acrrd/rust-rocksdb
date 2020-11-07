@@ -13,7 +13,11 @@
 
 use libc::{c_char, size_t};
 
-use crate::{db::DBInner, ffi, handle::Handle, ColumnFamily, Error, WriteOptions};
+use crate::{
+    transaction::Transaction,
+    db::DBInner, ffi, handle::Handle, transaction_db::TransactionDB, ColumnFamily, Error,
+    WriteOptions,
+};
 use ambassador::delegatable_trait;
 
 #[delegatable_trait]
@@ -50,6 +54,15 @@ where
     }
 }
 
+impl<T> DeleteCF for T
+where
+    T: DeleteCFOpt,
+{
+    fn delete_cf<K: AsRef<[u8]>>(&self, cf: &ColumnFamily, key: K) -> Result<(), Error> {
+        self.delete_cf_opt(cf, key, &WriteOptions::default())
+    }
+}
+
 impl DeleteOpt for DBInner {
     fn delete_opt<K: AsRef<[u8]>>(&self, key: K, writeopts: &WriteOptions) -> Result<(), Error> {
         let key = key.as_ref();
@@ -66,15 +79,6 @@ impl DeleteOpt for DBInner {
     }
 }
 
-impl<T> DeleteCF for T
-where
-    T: DeleteCFOpt,
-{
-    fn delete_cf<K: AsRef<[u8]>>(&self, cf: &ColumnFamily, key: K) -> Result<(), Error> {
-        self.delete_cf_opt(cf, key, &WriteOptions::default())
-    }
-}
-
 impl DeleteCFOpt for DBInner {
     fn delete_cf_opt<K: AsRef<[u8]>>(
         &self,
@@ -88,6 +92,79 @@ impl DeleteCFOpt for DBInner {
             ffi_try!(ffi::rocksdb_delete_cf(
                 self.handle(),
                 writeopts.inner,
+                cf.inner,
+                key.as_ptr() as *const c_char,
+                key.len() as size_t,
+            ));
+            Ok(())
+        }
+    }
+}
+
+impl DeleteOpt for TransactionDB {
+    fn delete_opt<K: AsRef<[u8]>>(&self, key: K, writeopts: &WriteOptions) -> Result<(), Error> {
+        let key = key.as_ref();
+
+        unsafe {
+            ffi_try!(ffi::rocksdb_transactiondb_delete(
+                self.handle(),
+                writeopts.inner,
+                key.as_ptr() as *const c_char,
+                key.len() as size_t,
+            ));
+            Ok(())
+        }
+    }
+}
+
+impl DeleteCFOpt for TransactionDB {
+    fn delete_cf_opt<K: AsRef<[u8]>>(
+        &self,
+        cf: &ColumnFamily,
+        key: K,
+        writeopts: &WriteOptions,
+    ) -> Result<(), Error> {
+        let key = key.as_ref();
+
+        unsafe {
+            ffi_try!(ffi::rocksdb_transactiondb_delete_cf(
+                self.handle(),
+                writeopts.inner,
+                cf.inner,
+                key.as_ptr() as *const c_char,
+                key.len() as size_t,
+            ));
+            Ok(())
+        }
+    }
+}
+
+impl<'a> Delete for Transaction<'a> {
+    fn delete<K: AsRef<[u8]>>(&self, key: K) -> Result<(), Error> {
+        let key = key.as_ref();
+
+        unsafe {
+            ffi_try!(ffi::rocksdb_transaction_delete(
+                self.handle(),
+                key.as_ptr() as *const c_char,
+                key.len() as size_t,
+            ));
+            Ok(())
+        }
+    }
+}
+
+impl<'a> DeleteCF for Transaction<'a> {
+    fn delete_cf<K: AsRef<[u8]>>(
+        &self,
+        cf: &ColumnFamily,
+        key: K,
+    ) -> Result<(), Error> {
+        let key = key.as_ref();
+
+        unsafe {
+            ffi_try!(ffi::rocksdb_transaction_delete_cf(
+                self.handle(),
                 cf.inner,
                 key.as_ptr() as *const c_char,
                 key.len() as size_t,

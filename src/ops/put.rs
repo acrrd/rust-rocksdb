@@ -14,7 +14,10 @@
 use ambassador::delegatable_trait;
 use libc::{c_char, size_t};
 
-use crate::{db::DBInner, ffi, handle::Handle, ColumnFamily, Error, WriteOptions};
+use crate::{
+    transaction::Transaction,
+    transaction_db::TransactionDB,
+    db::DBInner, ffi, handle::Handle, ColumnFamily, Error, WriteOptions};
 
 #[delegatable_trait]
 pub trait Put {
@@ -67,6 +70,19 @@ where
     }
 }
 
+impl<T> PutCF for T
+where
+    T: PutCFOpt,
+{
+    fn put_cf<K, V>(&self, cf: &ColumnFamily, key: K, value: V) -> Result<(), Error>
+    where
+        K: AsRef<[u8]>,
+        V: AsRef<[u8]>,
+    {
+        self.put_cf_opt(cf, key, value, &WriteOptions::default())
+    }
+}
+
 impl PutOpt for DBInner {
     fn put_opt<K, V>(&self, key: K, value: V, writeopts: &WriteOptions) -> Result<(), Error>
     where
@@ -90,19 +106,6 @@ impl PutOpt for DBInner {
     }
 }
 
-impl<T> PutCF for T
-where
-    T: PutCFOpt,
-{
-    fn put_cf<K, V>(&self, cf: &ColumnFamily, key: K, value: V) -> Result<(), Error>
-    where
-        K: AsRef<[u8]>,
-        V: AsRef<[u8]>,
-    {
-        self.put_cf_opt(cf, key, value, &WriteOptions::default())
-    }
-}
-
 impl PutCFOpt for DBInner {
     fn put_cf_opt<K, V>(
         &self,
@@ -122,6 +125,109 @@ impl PutCFOpt for DBInner {
             ffi_try!(ffi::rocksdb_put_cf(
                 self.handle(),
                 writeopts.inner,
+                cf.inner,
+                key.as_ptr() as *const c_char,
+                key.len() as size_t,
+                value.as_ptr() as *const c_char,
+                value.len() as size_t,
+            ));
+            Ok(())
+        }
+    }
+}
+
+impl PutOpt for TransactionDB {
+    fn put_opt<K, V>(&self, key: K, value: V, writeopts: &WriteOptions) -> Result<(), Error>
+    where
+        K: AsRef<[u8]>,
+        V: AsRef<[u8]>,
+    {
+        let key = key.as_ref();
+        let value = value.as_ref();
+
+        unsafe {
+            ffi_try!(ffi::rocksdb_transactiondb_put(
+                self.handle(),
+                writeopts.inner,
+                key.as_ptr() as *const c_char,
+                key.len() as size_t,
+                value.as_ptr() as *const c_char,
+                value.len() as size_t,
+            ));
+            Ok(())
+        }
+    }
+}
+
+impl PutCFOpt for TransactionDB {
+    fn put_cf_opt<K, V>(
+        &self,
+        cf: &ColumnFamily,
+        key: K,
+        value: V,
+        writeopts: &WriteOptions,
+    ) -> Result<(), Error>
+    where
+        K: AsRef<[u8]>,
+        V: AsRef<[u8]>,
+    {
+        let key = key.as_ref();
+        let value = value.as_ref();
+
+        unsafe {
+            ffi_try!(ffi::rocksdb_transactiondb_put_cf(
+                self.handle(),
+                writeopts.inner,
+                cf.inner,
+                key.as_ptr() as *const c_char,
+                key.len() as size_t,
+                value.as_ptr() as *const c_char,
+                value.len() as size_t,
+            ));
+            Ok(())
+        }
+    }
+}
+
+impl<'a> Put for Transaction<'a> {
+    fn put<K, V>(&self, key: K, value: V) -> Result<(), Error>
+    where
+        K: AsRef<[u8]>,
+        V: AsRef<[u8]>,
+    {
+        let key = key.as_ref();
+        let value = value.as_ref();
+
+        unsafe {
+            ffi_try!(ffi::rocksdb_transaction_put(
+                self.handle(),
+                key.as_ptr() as *const c_char,
+                key.len() as size_t,
+                value.as_ptr() as *const c_char,
+                value.len() as size_t,
+            ));
+            Ok(())
+        }
+    }
+}
+
+impl<'a> PutCF for Transaction<'a> {
+    fn put_cf<K, V>(
+        &self,
+        cf: &ColumnFamily,
+        key: K,
+        value: V,
+    ) -> Result<(), Error>
+    where
+        K: AsRef<[u8]>,
+        V: AsRef<[u8]>,
+    {
+        let key = key.as_ref();
+        let value = value.as_ref();
+
+        unsafe {
+            ffi_try!(ffi::rocksdb_transaction_put_cf(
+                self.handle(),
                 cf.inner,
                 key.as_ptr() as *const c_char,
                 key.len() as size_t,
