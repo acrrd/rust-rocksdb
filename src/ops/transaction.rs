@@ -13,7 +13,7 @@
 
 use crate::{
     ffi, handle::Handle, transaction::Transaction, transaction_db::TransactionDB,
-    TransactionOptions, WriteOptions,
+    OptimisticTransactionDB, OptimisticTransactionOptions, TransactionOptions, WriteOptions,
 };
 
 use std::ptr;
@@ -43,6 +43,24 @@ impl TransactionBeginOpt<&TransactionOptions> for TransactionDB {
     ) -> Transaction {
         unsafe {
             let inner = ffi::rocksdb_transaction_begin(
+                self.handle(),
+                writeopts.inner,
+                txopts.inner,
+                ptr::null_mut(),
+            );
+            Transaction::new(inner)
+        }
+    }
+}
+
+impl TransactionBeginOpt<&OptimisticTransactionOptions> for OptimisticTransactionDB {
+    fn transaction_opt(
+        &self,
+        writeopts: &WriteOptions,
+        txopts: &OptimisticTransactionOptions,
+    ) -> Transaction {
+        unsafe {
+            let inner = ffi::rocksdb_optimistictransaction_begin(
                 self.handle(),
                 writeopts.inner,
                 txopts.inner,

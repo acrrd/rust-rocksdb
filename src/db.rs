@@ -441,37 +441,33 @@ impl DBUtils {
     }
 }
 
-macro_rules! make_new_db_with_traits {
-    ($struct_name:ident, [$($d:ty),+])  => (
-        #[derive(Delegate)]
-        $(#[delegate($d)])+
-        pub struct $struct_name(DBInner);
-
+macro_rules! impl_common_methods {
+    ($struct_name:ident, $field:ident) => {
         #[allow(clippy::inline_always)]
         impl $struct_name {
             #[inline(always)]
             pub fn path(&self) -> &Path {
-                self.0.path()
+                self.$field.path()
             }
 
             #[inline(always)]
             pub fn latest_sequence_number(&self) -> u64 {
-                self.0.latest_sequence_number()
+                self.$field.latest_sequence_number()
             }
 
             #[inline(always)]
             pub fn get_updates_since(&self, seq_number: u64) -> Result<DBWALIterator, Error> {
-               self.0.get_updates_since(seq_number)
+                self.$field.get_updates_since(seq_number)
             }
 
             #[inline(always)]
             pub fn live_files(&self) -> Result<Vec<LiveFile>, Error> {
-                self.0.live_files()
+                self.$field.live_files()
             }
 
             #[inline(always)]
             pub fn cancel_all_background_work(&self, wait: bool) {
-                self.0.cancel_all_background_work(wait)
+                self.$field.cancel_all_background_work(wait)
             }
         }
 
@@ -479,21 +475,25 @@ macro_rules! make_new_db_with_traits {
             type DB = Self;
 
             unsafe fn create_snapshot(&self) -> Snapshot<Self> {
-                self.0.create_snapshot_rocksdb(self)
+                self.$field.create_snapshot_rocksdb(self)
             }
 
             unsafe fn release_snapshot(&self, snapshot: &mut Snapshot<Self>) {
-                self.0.release_snapshot_rocksdb(snapshot)
+                self.$field.release_snapshot_rocksdb(snapshot)
             }
         }
 
         impl MultiGetOpt<&ReadOptions> for $struct_name {
-            fn multi_get_opt<K, I>(&self, keys: I, readopts: &ReadOptions) -> Result<Vec<Vec<u8>>, Error>
+            fn multi_get_opt<K, I>(
+                &self,
+                keys: I,
+                readopts: &ReadOptions,
+            ) -> Result<Vec<Vec<u8>>, Error>
             where
                 K: AsRef<[u8]>,
                 I: IntoIterator<Item = K>,
             {
-                self.0.multi_get_opt(keys, readopts)
+                self.$field.multi_get_opt(keys, readopts)
             }
         }
 
@@ -507,9 +507,27 @@ macro_rules! make_new_db_with_traits {
                 K: AsRef<[u8]>,
                 I: IntoIterator<Item = (&'c ColumnFamily, K)>,
             {
-                self.0.multi_get_cf_opt(keys, readopts)
+                self.$field.multi_get_cf_opt(keys, readopts)
             }
         }
+    };
+}
+
+macro_rules! make_new_db_with_traits {
+    ($struct_name:ident, [$($d:ty),+])  => (
+        #[derive(Delegate)]
+        $(#[delegate($d)])+
+        pub struct $struct_name{ inner: DBInner}
+
+        impl $struct_name {
+            fn from_inner(inner: DBInner) -> Self {
+                Self {
+                    inner
+                }
+            }
+        }
+
+        impl_common_methods!($struct_name, inner);
 
     )
 }
@@ -576,7 +594,8 @@ impl DB {
             .into_iter()
             .map(|name| ColumnFamilyDescriptor::new(name.as_ref(), Options::default()));
 
-        DBInner::open_cf_descriptors_internal(opts, path, cfs, &AccessType::ReadWrite).map(Self)
+        DBInner::open_cf_descriptors_internal(opts, path, cfs, &AccessType::ReadWrite)
+            .map(Self::from_inner)
     }
 
     /// Opens a database with the given database options and column family descriptors.
@@ -585,7 +604,8 @@ impl DB {
         P: AsRef<Path>,
         I: IntoIterator<Item = ColumnFamilyDescriptor>,
     {
-        DBInner::open_cf_descriptors_internal(opts, path, cfs, &AccessType::ReadWrite).map(Self)
+        DBInner::open_cf_descriptors_internal(opts, path, cfs, &AccessType::ReadWrite)
+            .map(Self::from_inner)
     }
 }
 
@@ -639,7 +659,7 @@ impl ReadOnlyDB {
                 error_if_log_file_exist,
             },
         )
-        .map(Self)
+        .map(Self::from_inner)
     }
 }
 
@@ -693,14 +713,14 @@ impl SecondaryDB {
                 secondary_path: secondary_path.as_ref(),
             },
         )
-        .map(Self)
+        .map(Self::from_inner)
     }
 
     /// Tries to catch up with the primary by reading as much as possible from the
     /// log files.
     pub fn try_catch_up_with_primary(&self) -> Result<(), Error> {
         unsafe {
-            ffi_try!(ffi::rocksdb_try_catch_up_with_primary(self.0.inner));
+            ffi_try!(ffi::rocksdb_try_catch_up_with_primary(self.inner.inner));
         }
         Ok(())
     }
@@ -731,6 +751,62 @@ impl DBWithTTL {
     /// Opens the database with a Time to Live compaction filter.
     pub fn open<P: AsRef<Path>>(opts: &Options, path: P, ttl: Duration) -> Result<Self, Error> {
         DBInner::open_cf_descriptors_internal(opts, path, None, &AccessType::WithTTL { ttl })
-            .map(Self)
+            .map(Self::from_inner)
     }
 }
+
+struct OptimisticTransactionDBInner(*mut ffi::rocksdb_optimistictransactiondb_t);
+
+impl Drop for OptimisticTransactionDBInner {
+    fn drop(&mut self) {
+        unsafe {
+            ffi::rocksdb_optimistictransactiondb_close(self.0);
+        }
+    }
+}
+
+#[derive(Delegate)]
+#[delegate(BackupInternal, target = "base_db")]
+#[delegate(CheckpointInternal, target = "base_db")]
+#[delegate(CreateColumnFamily, target = "base_db")]
+#[delegate(DropColumnFamily, target = "base_db")]
+#[delegate(GetColumnFamily, target = "base_db")]
+#[delegate(CompactRangeCFOpt, target = "base_db")]
+#[delegate(CompactRangeOpt, target = "base_db")]
+#[delegate(DeleteCFOpt, target = "base_db")]
+#[delegate(DeleteOpt, target = "base_db")]
+#[delegate(DeleteRangeCFOpt, target = "base_db")]
+#[delegate(DeleteFileInRange, target = "base_db")]
+#[delegate(DeleteFileInRangeCF, target = "base_db")]
+#[delegate(FlushCFOpt, target = "base_db")]
+#[delegate(FlushOpt, target = "base_db")]
+#[delegate(GetPinnedCFOpt, target = "base_db")]
+#[delegate(GetPinnedOpt, target = "base_db")]
+#[delegate(IngestExternalFileCFOpt, target = "base_db")]
+#[delegate(IngestExternalFileOpt, target = "base_db")]
+#[delegate(Iterate, target = "base_db")]
+#[delegate(IterateCF, target = "base_db")]
+#[delegate(MergeCFOpt, target = "base_db")]
+#[delegate(MergeOpt, target = "base_db")]
+#[delegate(GetProperty, target = "base_db")]
+#[delegate(GetPropertyCF, target = "base_db")]
+#[delegate(PerfInternal, target = "base_db")]
+#[delegate(PutCFOpt, target = "base_db")]
+#[delegate(PutOpt, target = "base_db")]
+#[delegate(SetOptions, target = "base_db")]
+#[delegate(SetOptionsCF, target = "base_db")]
+#[delegate(WriteBatchWriteOpt, target = "base_db")]
+pub struct OptimisticTransactionDB {
+    // SAFETY: we need to drop `base_db` _before_ `inner`. Rust drops fields in the order they
+    // are declared, so `base_db` must always be declared before `inner`.
+    base_db: DBInner,
+    inner: OptimisticTransactionDBInner,
+}
+
+impl Handle<ffi::rocksdb_optimistictransactiondb_t> for OptimisticTransactionDB {
+    fn handle(&self) -> *mut ffi::rocksdb_optimistictransactiondb_t {
+        self.inner.0
+    }
+}
+
+impl_common_methods!(OptimisticTransactionDB, base_db);
