@@ -13,11 +13,10 @@
 
 use crate::{
     ffi,
-    ffi_util::to_cpath,
     handle::Handle,
+    open_util::open_cf_descriptors_internal,
     ops::{column_family::GetColumnFamilies, snapshot::SnapshotInternal},
     ColumnFamily, ColumnFamilyDescriptor, Error, Options, Snapshot, TransactionDBOptions,
-    DEFAULT_COLUMN_FAMILY_NAME,
 };
 
 // use ambassador::Delegate;
@@ -26,10 +25,8 @@ use libc::{self, c_char, c_int};
 use std::collections::BTreeMap;
 use std::ffi::CString;
 use std::fmt;
-use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
-use std::ptr;
 
 /// A RocksDB database with transaction
 ///
@@ -60,92 +57,29 @@ impl TransactionDB {
     fn open_cf_descriptors_internal<P, I>(
         opts: &Options,
         path: P,
-        txopts: &TransactionDBOptions,
         cfs: I,
+        txopts: &TransactionDBOptions,
     ) -> Result<Self, Error>
     where
         P: AsRef<Path>,
         I: IntoIterator<Item = ColumnFamilyDescriptor>,
     {
-        let cfs: Vec<_> = cfs.into_iter().collect();
+        let (inner, cfs, path) = open_cf_descriptors_internal(
+            opts,
+            path,
+            cfs,
+            txopts,
+            Self::open_raw,
+            Self::open_cf_raw,
+        )?;
 
-        let cpath = to_cpath(&path)?;
-
-        if let Err(e) = fs::create_dir_all(&path) {
-            return Err(Error::new(format!(
-                "Failed to create RocksDB directory: `{:?}`.",
-                e
-            )));
-        }
-
-        let db: *mut ffi::rocksdb_transactiondb_t;
-        let mut cf_map = BTreeMap::new();
-
-        if cfs.is_empty() {
-            db = Self::open_raw(opts, txopts, &cpath)?;
-        } else {
-            let mut cfs_v = cfs;
-            // Always open the default column family.
-            if !cfs_v.iter().any(|cf| cf.name == DEFAULT_COLUMN_FAMILY_NAME) {
-                cfs_v.push(ColumnFamilyDescriptor {
-                    name: String::from(DEFAULT_COLUMN_FAMILY_NAME),
-                    options: Options::default(),
-                });
-            }
-            // We need to store our CStrings in an intermediate vector
-            // so that their pointers remain valid.
-            let c_cfs: Vec<CString> = cfs_v
-                .iter()
-                .map(|cf| CString::new(cf.name.as_bytes()).unwrap())
-                .collect();
-
-            let cfnames: Vec<_> = c_cfs.iter().map(|cf| cf.as_ptr()).collect();
-
-            // These handles will be populated by DB.
-            let mut cfhandles: Vec<_> = cfs_v.iter().map(|_| ptr::null_mut()).collect();
-
-            let cfopts: Vec<_> = cfs_v
-                .iter()
-                .map(|cf| cf.options.inner as *const _)
-                .collect();
-
-            db = Self::open_cf_raw(
-                opts,
-                txopts,
-                &cpath,
-                &cfs_v,
-                &cfnames,
-                &cfopts,
-                &mut cfhandles,
-            )?;
-            for handle in &cfhandles {
-                if handle.is_null() {
-                    return Err(Error::new(
-                        "Received null column family handle from DB.".to_owned(),
-                    ));
-                }
-            }
-
-            for (cf_desc, inner) in cfs_v.iter().zip(cfhandles) {
-                cf_map.insert(cf_desc.name.clone(), ColumnFamily { inner });
-            }
-        }
-
-        if db.is_null() {
-            return Err(Error::new("Could not initialize database.".to_owned()));
-        }
-
-        Ok(Self {
-            inner: db,
-            cfs: cf_map,
-            path: path.as_ref().to_path_buf(),
-        })
+        Ok(Self { inner, cfs, path })
     }
 
     fn open_raw(
         opts: &Options,
-        txopts: &TransactionDBOptions,
         cpath: &CString,
+        txopts: &TransactionDBOptions,
     ) -> Result<*mut ffi::rocksdb_transactiondb_t, Error> {
         let db = unsafe {
             ffi_try!(ffi::rocksdb_transactiondb_open(
@@ -159,12 +93,12 @@ impl TransactionDB {
 
     fn open_cf_raw(
         opts: &Options,
-        txopts: &TransactionDBOptions,
         cpath: &CString,
         cfs_v: &[ColumnFamilyDescriptor],
         cfnames: &[*const c_char],
         cfopts: &[*const ffi::rocksdb_options_t],
         cfhandles: &mut Vec<*mut ffi::rocksdb_column_family_handle_t>,
+        txopts: &TransactionDBOptions,
     ) -> Result<*mut ffi::rocksdb_transactiondb_t, Error> {
         let db = unsafe {
             ffi_try!(ffi::rocksdb_transactiondb_open_column_families(
@@ -198,7 +132,7 @@ impl TransactionDB {
         path: P,
         txopts: &TransactionDBOptions,
     ) -> Result<Self, Error> {
-        Self::open_cf_opt(opts, path, txopts, None::<&str>)
+        Self::open_cf_opt(opts, path, None::<&str>, txopts)
     }
 
     /// Opens a database with the given database options and column family names.
@@ -210,7 +144,7 @@ impl TransactionDB {
         N: AsRef<str>,
     {
         let txopts = TransactionDBOptions::default();
-        Self::open_cf_opt(opts, path, &txopts, cfs)
+        Self::open_cf_opt(opts, path, cfs, &txopts)
     }
 
     /// Opens a database with the given database options and column family names.
@@ -218,8 +152,8 @@ impl TransactionDB {
     pub fn open_cf_opt<P, I, N>(
         opts: &Options,
         path: P,
-        txopts: &TransactionDBOptions,
         cfs: I,
+        txopts: &TransactionDBOptions,
     ) -> Result<Self, Error>
     where
         P: AsRef<Path>,
@@ -230,7 +164,7 @@ impl TransactionDB {
             .into_iter()
             .map(|name| ColumnFamilyDescriptor::new(name.as_ref(), Options::default()));
 
-        Self::open_cf_descriptors_internal(opts, path, txopts, cfs)
+        Self::open_cf_descriptors_internal(opts, path, cfs, txopts)
     }
 
     /// Opens a database with the given database options and column family descriptors.
@@ -240,7 +174,7 @@ impl TransactionDB {
         I: IntoIterator<Item = ColumnFamilyDescriptor>,
     {
         let txopts = TransactionDBOptions::default();
-        Self::open_cf_descriptors_internal(opts, path, &txopts, cfs)
+        Self::open_cf_descriptors_internal(opts, path, cfs, &txopts)
     }
 
     pub fn path(&self) -> &Path {

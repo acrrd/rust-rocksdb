@@ -97,6 +97,7 @@ mod sst_file_writer;
 mod transaction;
 mod transaction_db;
 mod write_batch;
+mod open_util;
 
 pub use crate::{
     column_family::{ColumnFamily, ColumnFamilyDescriptor, DEFAULT_COLUMN_FAMILY_NAME},

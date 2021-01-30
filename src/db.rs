@@ -17,6 +17,7 @@ use crate::{
     ffi,
     ffi_util::{from_cstr, raw_data, to_cpath},
     handle::Handle,
+    open_util::open_cf_descriptors_internal,
     ops::{
         backup::BackupInternal,
         checkpoint::CheckpointInternal,
@@ -41,7 +42,7 @@ use crate::{
     },
     ColumnFamily, ColumnFamilyDescriptor, CompactOptions, DBIterator, DBPinnableSlice,
     DBRawIterator, DBWALIterator, Error, FlushOptions, IngestExternalFileOptions, IteratorMode,
-    Options, ReadOptions, Snapshot, WriteBatch, WriteOptions, DEFAULT_COLUMN_FAMILY_NAME,
+    Options, ReadOptions, Snapshot, WriteBatch, WriteOptions,
 };
 
 use ambassador::Delegate;
@@ -49,7 +50,7 @@ use libc::{self, c_char, c_int, c_uchar};
 use std::collections::BTreeMap;
 use std::ffi::{CStr, CString};
 use std::fmt;
-use std::fs;
+use std::mem::ManuallyDrop;
 use std::path::Path;
 use std::path::PathBuf;
 use std::ptr;
@@ -100,79 +101,16 @@ impl DBInner {
         P: AsRef<Path>,
         I: IntoIterator<Item = ColumnFamilyDescriptor>,
     {
-        let cfs: Vec<_> = cfs.into_iter().collect();
+        let (inner, cfs, path) = open_cf_descriptors_internal(
+            opts,
+            path,
+            cfs,
+            access_type,
+            Self::open_raw,
+            Self::open_cf_raw,
+        )?;
 
-        let cpath = to_cpath(&path)?;
-
-        if let Err(e) = fs::create_dir_all(&path) {
-            return Err(Error::new(format!(
-                "Failed to create RocksDB directory: `{:?}`.",
-                e
-            )));
-        }
-
-        let db: *mut ffi::rocksdb_t;
-        let mut cf_map = BTreeMap::new();
-
-        if cfs.is_empty() {
-            db = Self::open_raw(opts, &cpath, access_type)?;
-        } else {
-            let mut cfs_v = cfs;
-            // Always open the default column family.
-            if !cfs_v.iter().any(|cf| cf.name == DEFAULT_COLUMN_FAMILY_NAME) {
-                cfs_v.push(ColumnFamilyDescriptor {
-                    name: String::from(DEFAULT_COLUMN_FAMILY_NAME),
-                    options: Options::default(),
-                });
-            }
-            // We need to store our CStrings in an intermediate vector
-            // so that their pointers remain valid.
-            let c_cfs: Vec<CString> = cfs_v
-                .iter()
-                .map(|cf| CString::new(cf.name.as_bytes()).unwrap())
-                .collect();
-
-            let cfnames: Vec<_> = c_cfs.iter().map(|cf| cf.as_ptr()).collect();
-
-            // These handles will be populated by DB.
-            let mut cfhandles: Vec<_> = cfs_v.iter().map(|_| ptr::null_mut()).collect();
-
-            let cfopts: Vec<_> = cfs_v
-                .iter()
-                .map(|cf| cf.options.inner as *const _)
-                .collect();
-
-            db = Self::open_cf_raw(
-                opts,
-                &cpath,
-                &cfs_v,
-                &cfnames,
-                &cfopts,
-                &mut cfhandles,
-                &access_type,
-            )?;
-            for handle in &cfhandles {
-                if handle.is_null() {
-                    return Err(Error::new(
-                        "Received null column family handle from DB.".to_owned(),
-                    ));
-                }
-            }
-
-            for (cf_desc, inner) in cfs_v.iter().zip(cfhandles) {
-                cf_map.insert(cf_desc.name.clone(), ColumnFamily { inner });
-            }
-        }
-
-        if db.is_null() {
-            return Err(Error::new("Could not initialize database.".to_owned()));
-        }
-
-        Ok(Self {
-            inner: db,
-            cfs: cf_map,
-            path: path.as_ref().to_path_buf(),
-        })
+        Ok(Self { inner, cfs, path })
     }
 
     fn open_raw(
@@ -755,16 +693,6 @@ impl DBWithTTL {
     }
 }
 
-struct OptimisticTransactionDBInner(*mut ffi::rocksdb_optimistictransactiondb_t);
-
-impl Drop for OptimisticTransactionDBInner {
-    fn drop(&mut self) {
-        unsafe {
-            ffi::rocksdb_optimistictransactiondb_close(self.0);
-        }
-    }
-}
-
 #[derive(Delegate)]
 #[delegate(BackupInternal, target = "base_db")]
 #[delegate(CheckpointInternal, target = "base_db")]
@@ -797,15 +725,26 @@ impl Drop for OptimisticTransactionDBInner {
 #[delegate(SetOptionsCF, target = "base_db")]
 #[delegate(WriteBatchWriteOpt, target = "base_db")]
 pub struct OptimisticTransactionDB {
-    // SAFETY: we need to drop `base_db` _before_ `inner`. Rust drops fields in the order they
-    // are declared, so `base_db` must always be declared before `inner`.
-    base_db: DBInner,
-    inner: OptimisticTransactionDBInner,
+    // We cannot use Drop of DBInner because we need to use another ffi function to close it.
+    base_db: ManuallyDrop<DBInner>,
+    inner: *mut ffi::rocksdb_optimistictransactiondb_t,
 }
 
 impl Handle<ffi::rocksdb_optimistictransactiondb_t> for OptimisticTransactionDB {
     fn handle(&self) -> *mut ffi::rocksdb_optimistictransactiondb_t {
-        self.inner.0
+        self.inner
+    }
+}
+
+impl Drop for OptimisticTransactionDB {
+    fn drop(&mut self) {
+        unsafe {
+            for cf in self.base_db.cfs.values() {
+                ffi::rocksdb_column_family_handle_destroy(cf.inner);
+            }
+            ffi::rocksdb_optimistictransactiondb_close_base_db(self.base_db.handle());
+            ffi::rocksdb_optimistictransactiondb_close(self.inner);
+        }
     }
 }
 
