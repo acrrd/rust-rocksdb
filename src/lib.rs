@@ -94,8 +94,8 @@ pub mod prelude;
 mod slice_transform;
 mod snapshot;
 mod sst_file_writer;
-mod transaction_db;
 mod transaction;
+mod transaction_db;
 mod write_batch;
 
 pub use crate::{
@@ -106,9 +106,10 @@ pub use crate::{
     db_options::{
         BlockBasedIndexType, BlockBasedOptions, BottommostLevelCompaction, Cache, CompactOptions,
         DBCompactionStyle, DBCompressionType, DBPath, DBRecoveryMode, DataBlockIndexType, Env,
-        FifoCompactOptions, FlushOptions, IngestExternalFileOptions, MemtableFactory, Options,
-        PlainTableFactoryOptions, ReadOptions, TransactionDBOptions, UniversalCompactOptions,
-        UniversalCompactionStopStyle, WriteOptions, TransactionOptions, OptimisticTransactionOptions
+        FifoCompactOptions, FlushOptions, IngestExternalFileOptions, MemtableFactory,
+        OptimisticTransactionOptions, Options, PlainTableFactoryOptions, ReadOptions,
+        TransactionDBOptions, TransactionOptions, UniversalCompactOptions,
+        UniversalCompactionStopStyle, WriteOptions,
     },
     db_pinnable_slice::DBPinnableSlice,
     merge_operator::MergeOperands,
@@ -116,8 +117,8 @@ pub use crate::{
     slice_transform::SliceTransform,
     snapshot::Snapshot,
     sst_file_writer::SstFileWriter,
-    transaction_db::TransactionDB,
     transaction::Transaction,
+    transaction_db::TransactionDB,
     write_batch::{WriteBatch, WriteBatchIterator},
 };
 

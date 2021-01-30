@@ -31,14 +31,11 @@ where
     for<'a> T: TransactionBeginOpt<&'a TransactionOptions>,
 {
     fn transaction(&self) -> Transaction {
-        self.transaction_opt(
-            &WriteOptions::default(),
-            &TransactionOptions::default(),
-        )
+        self.transaction_opt(&WriteOptions::default(), &TransactionOptions::default())
     }
 }
 
-impl TransactionBeginOpt<&TransactionOptions> for TransactionDB{
+impl TransactionBeginOpt<&TransactionOptions> for TransactionDB {
     fn transaction_opt(
         &self,
         writeopts: &WriteOptions,

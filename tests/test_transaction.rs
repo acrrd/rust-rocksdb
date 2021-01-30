@@ -16,9 +16,7 @@ mod util;
 
 use pretty_assertions::assert_eq;
 
-use rocksdb::{
-    prelude::*, MergeOperands, TransactionDB, TransactionDBOptions, TransactionOptions,
-};
+use rocksdb::{prelude::*, MergeOperands, TransactionDB, TransactionDBOptions, TransactionOptions};
 use util::DBPath;
 
 #[test]

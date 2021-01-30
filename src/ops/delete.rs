@@ -14,9 +14,8 @@
 use libc::{c_char, size_t};
 
 use crate::{
-    transaction::Transaction,
-    db::DBInner, ffi, handle::Handle, transaction_db::TransactionDB, ColumnFamily, Error,
-    WriteOptions,
+    db::DBInner, ffi, handle::Handle, transaction::Transaction, transaction_db::TransactionDB,
+    ColumnFamily, Error, WriteOptions,
 };
 use ambassador::delegatable_trait;
 
@@ -155,11 +154,7 @@ impl<'a> Delete for Transaction<'a> {
 }
 
 impl<'a> DeleteCF for Transaction<'a> {
-    fn delete_cf<K: AsRef<[u8]>>(
-        &self,
-        cf: &ColumnFamily,
-        key: K,
-    ) -> Result<(), Error> {
+    fn delete_cf<K: AsRef<[u8]>>(&self, cf: &ColumnFamily, key: K) -> Result<(), Error> {
         let key = key.as_ref();
 
         unsafe {

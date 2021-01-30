@@ -14,10 +14,8 @@
 use ambassador::delegatable_trait;
 
 use crate::{
-    transaction_db::TransactionDB,
-    transaction::Transaction,
-    db::DBInner, ffi, handle::Handle, ColumnFamily, DBIterator, DBRawIterator, Direction,
-    IteratorMode, ReadOptions,
+    db::DBInner, ffi, handle::Handle, transaction::Transaction, transaction_db::TransactionDB,
+    ColumnFamily, DBIterator, DBRawIterator, Direction, IteratorMode, ReadOptions,
 };
 
 #[delegatable_trait]
@@ -142,7 +140,8 @@ impl IterateCF for DBInner {
 
 impl Iterate for TransactionDB {
     fn raw_iterator_opt<'a: 'b, 'b>(&'a self, readopts: ReadOptions) -> DBRawIterator<'b> {
-        let iter = unsafe { ffi::rocksdb_transactiondb_create_iterator(self.handle(), readopts.inner) };
+        let iter =
+            unsafe { ffi::rocksdb_transactiondb_create_iterator(self.handle(), readopts.inner) };
         DBRawIterator::new(iter, readopts)
     }
 }
@@ -153,8 +152,9 @@ impl IterateCF for TransactionDB {
         cf: &ColumnFamily,
         readopts: ReadOptions,
     ) -> DBRawIterator<'b> {
-        let iter =
-            unsafe { ffi::rocksdb_transactiondb_create_iterator_cf(self.handle(), readopts.inner, cf.inner) };
+        let iter = unsafe {
+            ffi::rocksdb_transactiondb_create_iterator_cf(self.handle(), readopts.inner, cf.inner)
+        };
 
         DBRawIterator::new(iter, readopts)
     }
@@ -162,7 +162,8 @@ impl IterateCF for TransactionDB {
 
 impl<'t> Iterate for Transaction<'t> {
     fn raw_iterator_opt<'a: 'b, 'b>(&'a self, readopts: ReadOptions) -> DBRawIterator<'b> {
-        let iter = unsafe { ffi::rocksdb_transaction_create_iterator(self.handle(), readopts.inner) };
+        let iter =
+            unsafe { ffi::rocksdb_transaction_create_iterator(self.handle(), readopts.inner) };
         DBRawIterator::new(iter, readopts)
     }
 }
@@ -173,8 +174,9 @@ impl<'t> IterateCF for Transaction<'t> {
         cf: &ColumnFamily,
         readopts: ReadOptions,
     ) -> DBRawIterator<'b> {
-        let iter =
-            unsafe { ffi::rocksdb_transaction_create_iterator_cf(self.handle(), readopts.inner, cf.inner) };
+        let iter = unsafe {
+            ffi::rocksdb_transaction_create_iterator_cf(self.handle(), readopts.inner, cf.inner)
+        };
 
         DBRawIterator::new(iter, readopts)
     }

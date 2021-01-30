@@ -76,7 +76,7 @@ pub(crate) use self::perf::PerfInternal;
 pub use self::property::{GetProperty, GetPropertyCF};
 pub use self::put::{Put, PutCF, PutCFOpt, PutOpt};
 pub use self::set_options::{SetOptions, SetOptionsCF};
-pub use self::transaction::{TransactionBegin, TransactionBeginOpt};
 pub(crate) use self::snapshot::SnapshotInternal;
 pub use self::snapshot::Snapshotable;
+pub use self::transaction::{TransactionBegin, TransactionBeginOpt};
 pub use self::write_batch::{WriteBatchWrite, WriteBatchWriteOpt};

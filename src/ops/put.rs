@@ -15,9 +15,9 @@ use ambassador::delegatable_trait;
 use libc::{c_char, size_t};
 
 use crate::{
-    transaction::Transaction,
-    transaction_db::TransactionDB,
-    db::DBInner, ffi, handle::Handle, ColumnFamily, Error, WriteOptions};
+    db::DBInner, ffi, handle::Handle, transaction::Transaction, transaction_db::TransactionDB,
+    ColumnFamily, Error, WriteOptions,
+};
 
 #[delegatable_trait]
 pub trait Put {
@@ -212,12 +212,7 @@ impl<'a> Put for Transaction<'a> {
 }
 
 impl<'a> PutCF for Transaction<'a> {
-    fn put_cf<K, V>(
-        &self,
-        cf: &ColumnFamily,
-        key: K,
-        value: V,
-    ) -> Result<(), Error>
+    fn put_cf<K, V>(&self, cf: &ColumnFamily, key: K, value: V) -> Result<(), Error>
     where
         K: AsRef<[u8]>,
         V: AsRef<[u8]>,

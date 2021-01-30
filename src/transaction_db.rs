@@ -15,10 +15,7 @@ use crate::{
     ffi,
     ffi_util::to_cpath,
     handle::Handle,
-    ops::{
-        column_family::GetColumnFamilies,
-        snapshot::SnapshotInternal,
-    },
+    ops::{column_family::GetColumnFamilies, snapshot::SnapshotInternal},
     ColumnFamily, ColumnFamilyDescriptor, Error, Options, Snapshot, TransactionDBOptions,
     DEFAULT_COLUMN_FAMILY_NAME,
 };

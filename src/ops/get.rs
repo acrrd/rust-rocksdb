@@ -15,12 +15,12 @@ use ambassador::delegatable_trait;
 use libc::{c_char, size_t};
 
 use crate::{
-    make_vec_from_val_ptr,
     ffi,
     handle::Handle,
+    make_vec_from_val_ptr,
     ops::{GetPinnedCFOpt, GetPinnedOpt},
-    transaction_db::TransactionDB,
     transaction::Transaction,
+    transaction_db::TransactionDB,
     ColumnFamily, Error, ReadOptions,
 };
 

@@ -137,12 +137,7 @@ impl MergeCFOpt for DBInner {
 }
 
 impl MergeOpt for TransactionDB {
-    fn merge_opt<K, V>(
-        &self,
-        key: K,
-        value: V,
-        writeopts: &WriteOptions,
-    ) -> Result<(), Error>
+    fn merge_opt<K, V>(&self, key: K, value: V, writeopts: &WriteOptions) -> Result<(), Error>
     where
         K: AsRef<[u8]>,
         V: AsRef<[u8]>,
@@ -195,11 +190,7 @@ impl MergeCFOpt for TransactionDB {
 }
 
 impl<'a> Merge for Transaction<'a> {
-    fn merge<K, V>(
-        &self,
-        key: K,
-        value: V,
-    ) -> Result<(), Error>
+    fn merge<K, V>(&self, key: K, value: V) -> Result<(), Error>
     where
         K: AsRef<[u8]>,
         V: AsRef<[u8]>,
@@ -221,12 +212,7 @@ impl<'a> Merge for Transaction<'a> {
 }
 
 impl<'a> MergeCF for Transaction<'a> {
-    fn merge_cf<K, V>(
-        &self,
-        cf: &ColumnFamily,
-        key: K,
-        value: V,
-    ) -> Result<(), Error>
+    fn merge_cf<K, V>(&self, cf: &ColumnFamily, key: K, value: V) -> Result<(), Error>
     where
         K: AsRef<[u8]>,
         V: AsRef<[u8]>,

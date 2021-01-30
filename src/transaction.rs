@@ -15,7 +15,7 @@ use crate::{
     ReadOptions, Snapshot,
 };
 
-use libc::{c_uchar, size_t, c_void, c_char};
+use libc::{c_char, c_uchar, c_void, size_t};
 use std::marker::PhantomData;
 
 /// A transaction.
