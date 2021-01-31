@@ -751,7 +751,7 @@ impl OptimisticTransactionDB {
         I: IntoIterator<Item = ColumnFamilyDescriptor>,
     {
         let (inner, cfs, path) =
-            open_cf_descriptors_internal(opts, path, cfs, &(), Self::open_raw, Self::open_cf_raw)?;
+            open_cf_descriptors_internal(opts, path, cfs, (), Self::open_raw, Self::open_cf_raw)?;
 
         let base_db = unsafe { ffi::rocksdb_optimistictransactiondb_get_base_db(inner) };
         let base_db = ManuallyDrop::new(DBInner {
@@ -765,7 +765,7 @@ impl OptimisticTransactionDB {
     fn open_raw(
         opts: &Options,
         cpath: &CString,
-        _: &(),
+        _: (),
     ) -> Result<*mut ffi::rocksdb_optimistictransactiondb_t, Error> {
         let db = unsafe {
             ffi_try!(ffi::rocksdb_optimistictransactiondb_open(
@@ -783,7 +783,7 @@ impl OptimisticTransactionDB {
         cfnames: &[*const c_char],
         cfopts: &[*const ffi::rocksdb_options_t],
         cfhandles: &mut Vec<*mut ffi::rocksdb_column_family_handle_t>,
-        _: &(),
+        _: (),
     ) -> Result<*mut ffi::rocksdb_optimistictransactiondb_t, Error> {
         let db = unsafe {
             ffi_try!(ffi::rocksdb_optimistictransactiondb_open_column_families(

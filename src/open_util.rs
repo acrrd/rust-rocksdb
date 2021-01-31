@@ -29,14 +29,14 @@ pub fn open_cf_descriptors_internal<P, I, D, Ptr, OpenRaw, OpenRawCF>(
     opts: &Options,
     path: P,
     cfs: I,
-    descriptor: &D,
+    descriptor: D,
     open_raw: OpenRaw,
     open_cf_raw: OpenRawCF,
 ) -> Result<(*mut Ptr, BTreeMap<String, ColumnFamily>, PathBuf), Error>
 where
     P: AsRef<Path>,
     I: IntoIterator<Item = ColumnFamilyDescriptor>,
-    OpenRaw: Fn(&Options, &CString, &D) -> Result<*mut Ptr, Error>,
+    OpenRaw: Fn(&Options, &CString, D) -> Result<*mut Ptr, Error>,
     OpenRawCF: Fn(
         &Options,
         &CString,
@@ -44,7 +44,7 @@ where
         &[*const c_char],
         &[*const ffi::rocksdb_options_t],
         &mut Vec<*mut ffi::rocksdb_column_family_handle_t>,
-        &D,
+        D,
     ) -> Result<*mut Ptr, Error>,
 {
     let cfs: Vec<_> = cfs.into_iter().collect();
