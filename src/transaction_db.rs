@@ -14,7 +14,7 @@
 use crate::{
     ffi,
     handle::Handle,
-    open_util::{open_cf_descriptors_internal, convert_cfs_to_descriptors},
+    open_util::{convert_cfs_to_descriptors, open_cf_descriptors_internal},
     ops::{column_family::GetColumnFamilies, snapshot::SnapshotInternal},
     ColumnFamily, ColumnFamilyDescriptor, Error, Options, Snapshot, TransactionDBOptions,
 };

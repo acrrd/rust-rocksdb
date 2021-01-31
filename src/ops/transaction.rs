@@ -22,14 +22,11 @@ pub trait TransactionBegin {
     fn transaction(&self) -> Transaction;
 }
 
-pub trait TransactionBeginOpt<T> {
-    fn transaction_opt(&self, wrt_opts: &WriteOptions, tx_opts: T) -> Transaction;
+pub trait TransactionBeginOpt<TxOpts> {
+    fn transaction_opt(&self, wrt_opts: &WriteOptions, tx_opts: TxOpts) -> Transaction;
 }
 
-impl<T> TransactionBegin for T
-where
-    for<'a> T: TransactionBeginOpt<&'a TransactionOptions>,
-{
+impl TransactionBegin for TransactionDB {
     fn transaction(&self) -> Transaction {
         self.transaction_opt(&WriteOptions::default(), &TransactionOptions::default())
     }
@@ -50,6 +47,15 @@ impl TransactionBeginOpt<&TransactionOptions> for TransactionDB {
             );
             Transaction::new(inner)
         }
+    }
+}
+
+impl TransactionBegin for OptimisticTransactionDB {
+    fn transaction(&self) -> Transaction {
+        self.transaction_opt(
+            &WriteOptions::default(),
+            &OptimisticTransactionOptions::default(),
+        )
     }
 }
 
