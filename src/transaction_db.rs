@@ -14,7 +14,7 @@
 use crate::{
     ffi,
     handle::Handle,
-    open_util::open_cf_descriptors_internal,
+    open_util::{open_cf_descriptors_internal, convert_cfs_to_descriptors},
     ops::{column_family::GetColumnFamilies, snapshot::SnapshotInternal},
     ColumnFamily, ColumnFamilyDescriptor, Error, Options, Snapshot, TransactionDBOptions,
 };
@@ -160,9 +160,7 @@ impl TransactionDB {
         I: IntoIterator<Item = N>,
         N: AsRef<str>,
     {
-        let cfs = cfs
-            .into_iter()
-            .map(|name| ColumnFamilyDescriptor::new(name.as_ref(), Options::default()));
+        let cfs = convert_cfs_to_descriptors(cfs);
 
         Self::open_cf_descriptors_internal(opts, path, cfs, txopts)
     }

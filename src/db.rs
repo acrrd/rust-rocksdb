@@ -17,7 +17,7 @@ use crate::{
     ffi,
     ffi_util::{from_cstr, raw_data, to_cpath},
     handle::Handle,
-    open_util::open_cf_descriptors_internal,
+    open_util::{convert_cfs_to_descriptors, open_cf_descriptors_internal},
     ops::{
         backup::BackupInternal,
         checkpoint::CheckpointInternal,
@@ -528,9 +528,7 @@ impl DB {
         I: IntoIterator<Item = N>,
         N: AsRef<str>,
     {
-        let cfs = cfs
-            .into_iter()
-            .map(|name| ColumnFamilyDescriptor::new(name.as_ref(), Options::default()));
+        let cfs = convert_cfs_to_descriptors(cfs);
 
         DBInner::open_cf_descriptors_internal(opts, path, cfs, &AccessType::ReadWrite)
             .map(Self::from_inner)
@@ -585,9 +583,7 @@ impl ReadOnlyDB {
         I: IntoIterator<Item = N>,
         N: AsRef<str>,
     {
-        let cfs = cfs
-            .into_iter()
-            .map(|name| ColumnFamilyDescriptor::new(name.as_ref(), Options::default()));
+        let cfs = convert_cfs_to_descriptors(cfs);
 
         DBInner::open_cf_descriptors_internal(
             opts,
@@ -639,9 +635,7 @@ impl SecondaryDB {
         I: IntoIterator<Item = N>,
         N: AsRef<str>,
     {
-        let cfs = cfs
-            .into_iter()
-            .map(|name| ColumnFamilyDescriptor::new(name.as_ref(), Options::default()));
+        let cfs = convert_cfs_to_descriptors(cfs);
 
         DBInner::open_cf_descriptors_internal(
             opts,
@@ -749,3 +743,92 @@ impl Drop for OptimisticTransactionDB {
 }
 
 impl_common_methods!(OptimisticTransactionDB, base_db);
+
+impl OptimisticTransactionDB {
+    fn open_cf_descriptors_internal<P, I>(opts: &Options, path: P, cfs: I) -> Result<Self, Error>
+    where
+        P: AsRef<Path>,
+        I: IntoIterator<Item = ColumnFamilyDescriptor>,
+    {
+        let (inner, cfs, path) =
+            open_cf_descriptors_internal(opts, path, cfs, &(), Self::open_raw, Self::open_cf_raw)?;
+
+        let base_db = unsafe { ffi::rocksdb_optimistictransactiondb_get_base_db(inner) };
+        let base_db = ManuallyDrop::new(DBInner {
+            inner: base_db,
+            cfs,
+            path,
+        });
+        Ok(Self { base_db, inner })
+    }
+
+    fn open_raw(
+        opts: &Options,
+        cpath: &CString,
+        _: &(),
+    ) -> Result<*mut ffi::rocksdb_optimistictransactiondb_t, Error> {
+        let db = unsafe {
+            ffi_try!(ffi::rocksdb_optimistictransactiondb_open(
+                opts.inner,
+                cpath.as_ptr() as *const _,
+            ))
+        };
+        Ok(db)
+    }
+
+    fn open_cf_raw(
+        opts: &Options,
+        cpath: &CString,
+        cfs_v: &[ColumnFamilyDescriptor],
+        cfnames: &[*const c_char],
+        cfopts: &[*const ffi::rocksdb_options_t],
+        cfhandles: &mut Vec<*mut ffi::rocksdb_column_family_handle_t>,
+        _: &(),
+    ) -> Result<*mut ffi::rocksdb_optimistictransactiondb_t, Error> {
+        let db = unsafe {
+            ffi_try!(ffi::rocksdb_optimistictransactiondb_open_column_families(
+                opts.inner,
+                cpath.as_ptr(),
+                cfs_v.len() as c_int,
+                cfnames.as_ptr(),
+                cfopts.as_ptr(),
+                cfhandles.as_mut_ptr(),
+            ))
+        };
+        Ok(db)
+    }
+
+    pub fn open_default<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
+        let mut opts = Options::default();
+        opts.create_if_missing(true);
+        Self::open(&opts, path)
+    }
+
+    /// Opens the database with the specified options.
+    pub fn open<P: AsRef<Path>>(opts: &Options, path: P) -> Result<Self, Error> {
+        Self::open_cf(opts, path, None::<&str>)
+    }
+
+    /// Opens a database with the given database options and column family names.
+    ///
+    /// Column families opened using this function will be created with default `Options`.
+    pub fn open_cf<P, I, N>(opts: &Options, path: P, cfs: I) -> Result<Self, Error>
+    where
+        P: AsRef<Path>,
+        I: IntoIterator<Item = N>,
+        N: AsRef<str>,
+    {
+        let cfs = convert_cfs_to_descriptors(cfs);
+
+        Self::open_cf_descriptors_internal(opts, path, cfs)
+    }
+
+    /// Opens a database with the given database options and column family descriptors.
+    pub fn open_cf_descriptors<P, I>(opts: &Options, path: P, cfs: I) -> Result<Self, Error>
+    where
+        P: AsRef<Path>,
+        I: IntoIterator<Item = ColumnFamilyDescriptor>,
+    {
+        Self::open_cf_descriptors_internal(opts, path, cfs)
+    }
+}

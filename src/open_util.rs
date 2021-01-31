@@ -38,14 +38,14 @@ where
     I: IntoIterator<Item = ColumnFamilyDescriptor>,
     OpenRaw: Fn(&Options, &CString, &D) -> Result<*mut Ptr, Error>,
     OpenRawCF: Fn(
-    &Options,
-    &CString,
-    &[ColumnFamilyDescriptor],
-    &[*const c_char],
-    &[*const ffi::rocksdb_options_t],
-    &mut Vec<*mut ffi::rocksdb_column_family_handle_t>,
-    &D,
-) -> Result<*mut Ptr, Error>,
+        &Options,
+        &CString,
+        &[ColumnFamilyDescriptor],
+        &[*const c_char],
+        &[*const ffi::rocksdb_options_t],
+        &mut Vec<*mut ffi::rocksdb_column_family_handle_t>,
+        &D,
+    ) -> Result<*mut Ptr, Error>,
 {
     let cfs: Vec<_> = cfs.into_iter().collect();
 
@@ -116,4 +116,13 @@ where
     }
 
     Ok((db, cf_map, path.as_ref().to_path_buf()))
+}
+
+pub fn convert_cfs_to_descriptors<I, N>(cfs: I) -> impl IntoIterator<Item = ColumnFamilyDescriptor>
+where
+    I: IntoIterator<Item = N>,
+    N: AsRef<str>,
+{
+    cfs.into_iter()
+        .map(|name| ColumnFamilyDescriptor::new(name.as_ref(), Options::default()))
 }
