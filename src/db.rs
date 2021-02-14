@@ -14,6 +14,7 @@
 //
 
 use crate::{
+    db_options::OptionsMustOutliveDB,
     ffi,
     ffi_util::{from_cstr, opt_bytes_to_ptr, raw_data, to_cpath},
     ColumnFamily, ColumnFamilyDescriptor, CompactOptions, DBIterator, DBPinnableSlice,
@@ -41,6 +42,7 @@ pub struct DB {
     pub(crate) inner: *mut ffi::rocksdb_t,
     cfs: BTreeMap<String, ColumnFamily>,
     path: PathBuf,
+    _outlive: OptionsMustOutliveDB,
 }
 
 // Safety note: auto-implementing Send on most db-related types is prevented by the inner FFI
@@ -107,6 +109,7 @@ impl DB {
             inner: db,
             cfs: BTreeMap::new(),
             path: path.as_ref().to_path_buf(),
+            _outlive: opts.outlive.clone(),
         })
     }
 
@@ -270,6 +273,7 @@ impl DB {
             inner: db,
             cfs: cf_map,
             path: path.as_ref().to_path_buf(),
+            _outlive: opts.outlive.clone(),
         })
     }
 
